@@ -1,0 +1,267 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS CloudFormation template to create a VPC network with public and private subnets, NAT gateway, route tables, EKS Cluster with Fargate profile, and an Aurora PostgreSQL Serverless database.
+
+Parameters:
+  AvailabilityZone1:
+    Type: String
+    Default: us-east-1a
+    Description: The first Availability Zone to use.
+
+  AvailabilityZone2:
+    Type: String
+    Default: us-east-1b
+    Description: The second Availability Zone to use.
+
+  AvailabilityZone3:
+    Type: String
+    Default: us-east-1c
+    Description: The third Availability Zone to use.
+
+Resources:
+  # Create VPC
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties: 
+      CidrBlock: '10.100.0.0/16'
+      Tags:
+        - Key: Name
+          Value: dev-vpc-cal
+
+  # Create Internet Gateway
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: dev-internet-gateway-cal-01
+
+  # Attach Internet Gateway to VPC
+  InternetGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Create Public Subnets
+  PublicSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.100.1.0/24'
+      AvailabilityZone: !Ref AvailabilityZone1
+      Tags:
+        - Key: Name
+          Value: dev-pub-sub-cal-01
+
+  PublicSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.100.2.0/24'
+      AvailabilityZone: !Ref AvailabilityZone2
+      Tags:
+        - Key: Name
+          Value: dev-pub-sub-cal-02
+
+  PublicSubnet3:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.100.3.0/24'
+      AvailabilityZone: !Ref AvailabilityZone3
+      Tags:
+        - Key: Name
+          Value: dev-pub-sub-cal-03
+
+  # Create Private Subnets
+  PrivateSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.100.4.0/24'
+      AvailabilityZone: !Ref AvailabilityZone1
+      Tags:
+        - Key: Name
+          Value: dev-pvt-sub-cal-01
+
+  PrivateSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.100.5.0/24'
+      AvailabilityZone: !Ref AvailabilityZone2
+      Tags:
+        - Key: Name
+          Value: dev-pvt-sub-cal-02
+
+  PrivateSubnet3:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.100.6.0/24'
+      AvailabilityZone: !Ref AvailabilityZone3
+      Tags:
+        - Key: Name
+          Value: dev-pvt-sub-cal-03
+
+  # Create NAT Gateway
+  EIP:
+    Type: 'AWS::EC2::EIP'
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId: !GetAtt EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: dev-pub-nat-cal-01
+
+  # Create Public Route Table
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: public-route-table
+
+  # Route from Public Route Table to Internet Gateway
+  PublicRoute:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  # Associate Public Subnets with Public Route Table
+  PublicSubnetRouteTableAssociation1:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation2:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation3:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet3
+      RouteTableId: !Ref PublicRouteTable
+
+  # Create Private Route Table
+  PrivateRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: private-route-table
+
+  # Route from Private Route Table to NAT Gateway
+  PrivateRoute:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway
+
+  # Associate Private Subnets with Private Route Table
+  PrivateSubnetRouteTableAssociation1:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetRouteTableAssociation2:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetRouteTableAssociation3:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnet3
+      RouteTableId: !Ref PrivateRouteTable
+
+  # EKS Cluster
+  MyEKSCluster:
+    Type: 'AWS::EKS::Cluster'
+    Properties:
+      Name: dev-eks-cal-01
+      RoleArn: arn:aws:iam::471112683049:role/AWSRoleForAmazonEKSCommon
+      ResourcesVpcConfig:
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+          - !Ref PrivateSubnet3
+        EndpointPublicAccess: true
+
+  # Fargate Profile
+  MyFargateProfile:
+    Type: 'AWS::EKS::FargateProfile'
+    Properties:
+      ClusterName: !Ref MyEKSCluster
+      FargateProfileName: dev-eks-cal-fargate-01
+      PodExecutionRoleArn: arn:aws:iam::471112683049:role/AmazonEKSFargatePodExecutionRoleCommon
+      Subnets:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+      Selectors:
+        - Namespace: default
+        - Namespace: kube-system
+
+  # Aurora PostgreSQL Serverless DB Cluster
+  DBClusterSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Security group for Aurora PostgreSQL Serverless
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 0.0.0.0/0
+    DependsOn:
+      - PrivateSubnetRouteTableAssociation1
+      - PrivateSubnetRouteTableAssociation2
+      - PrivateSubnetRouteTableAssociation3
+
+  DBSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: Subnet group for Aurora DB Cluster
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+    DependsOn:
+      - PrivateSubnetRouteTableAssociation1
+      - PrivateSubnetRouteTableAssociation2
+      - PrivateSubnetRouteTableAssociation3
+
+  DBCluster:
+    Type: 'AWS::RDS::DBCluster'
+    Properties:
+      Engine: aurora-postgresql
+      EngineMode: serverless
+      DBClusterIdentifier: aurora-serverless-cluster
+      MasterUsername: masteruser
+      MasterUserPassword: Password1234
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DBClusterSecurityGroup
+      ScalingConfiguration:
+        AutoPause: true
+        MinCapacity: 2
+        MaxCapacity: 8
+        SecondsUntilAutoPause: 300
+      BackupRetentionPeriod: 1

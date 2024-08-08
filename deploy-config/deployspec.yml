@@ -1,0 +1,50 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      # Ensure the system is updated
+      - echo Updating system...
+      - sudo yum update -y
+
+      # Try installing curl with conflict resolution
+      - echo Installing curl...
+      - sudo yum install -y curl || sudo yum install -y --allowerasing curl
+
+      # If curl is still not working, download kubectl directly
+      - echo Downloading kubectl...
+      - curl -LO "https://dl.k8s.io/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl" || wget "https://dl.k8s.io/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl"
+
+      - chmod +x ./kubectl
+      - sudo mv ./kubectl /usr/local/bin/kubectl
+      - kubectl version --client
+
+  pre_build:
+    commands:
+
+      # Set environment variables for AWS CLI 
+      - export AWS_ACCESS_KEY_ID=AKIAW3MEBBYUUVSNZCUA
+      - export AWS_SECRET_ACCESS_KEY=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
+      - export AWS_REGION=us-east-1
+      # Set environment variables
+      - export CLUSTER_NAME=dev-eks-cal-01
+      - export AWS_REGION=us-east-1
+      - export KUBECONFIG_FILE=/root/.kube/config
+      # Retrieve and update kubeconfig
+      - aws eks update-kubeconfig --name $CLUSTER_NAME --region $AWS_REGION
+
+  build:
+    commands:
+      # Validate Kubernetes manifests (optional)
+      - kubectl get pods
+      - kubectl apply --dry-run=client -f .aws/eks/
+
+  post_build:
+    commands:
+      # Deploy to EKS using kubectl
+      - echo "Deploying to EKS..."
+      - kubectl replace --force -f .aws/eks/
+
+artifacts:
+  files:
+    - '**/*'
